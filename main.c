@@ -20,20 +20,24 @@
 				,__FILE__,__LINE__,getpid(),errno,strerror(errno));\
 				exit(EXIT_FAILURE);}
 
-void print_term(cella *map, int SO_TOPCELLS, int SO_TAXI, taxi_stats *stats, richieste_stats *r_stats);
+void print_term(cella *map, int SO_TOPCELLS, int SO_TAXI, int SO_SOURCES, taxi_stats *stats, richieste_stats *r_stats);
 
 void handler(int signal);
 
 void dealloc(char * arg[]);
 
+struct source{
+	int pid;
+	int pos;
+};
 
 int mappa_shm,celle_sem, sc_sem, sync_sem, msg_id;
-
+struct source *sourcearr;
 int terminate_flag=1;
 
 int main(int argc, char *argv[]){
 	int SO_TAXI, SO_HOLES, SO_CAPMIN, SO_CAPMAX, SO_SOURCES, SO_DURATION, SO_TIMEOUT, SO_TOPCELLS;
-	int i, j, *source_pos_arr, MAX_HOLES,* source_pids;
+	int i, j,  MAX_HOLES;
 	/*int pipe_fd[2];*/
 	long SO_TIMENSEC_MIN,SO_TIMENSEC_MAX;
 	struct sembuf ops[1];
@@ -44,6 +48,7 @@ int main(int argc, char *argv[]){
 	sigset_t mask;
 	taxi_stats *stats;
 	richieste_stats *r_stats;
+	
 	
 	MAX_HOLES = ((SO_WIDTH>>1)+(SO_WIDTH&1))*((SO_HEIGHT>>1)+(SO_HEIGHT&1));
 	/*numero massimo generabile, non è detto che vengano generate anche se soddisfa il criterio*/
@@ -167,7 +172,6 @@ int main(int argc, char *argv[]){
 				fprintf(stderr, "fork taxi error");
 				terminate_flag = 0;
 				break;
-				}
 			case 0 :
 				sprintf(taxi_argv[7],"%d",i);
 				execvp("./taxi", taxi_argv);
@@ -181,13 +185,12 @@ int main(int argc, char *argv[]){
 	for(i=0;i<6;i++){
 		source_argv[i] = malloc(256);
 	}
-	source_pids = malloc(sizeof(int)*SO_SOURCES);
-	source_pos_arr = malloc(sizeof(int)*SO_SOURCES);
+	sourcearr = malloc(sizeof(struct source)*SO_SOURCES);
 
 	for(i=0;i<SO_SOURCES;){
-		source_pos_arr[i] = random_transable_pos(shmap);
+		sourcearr[i].pos = random_transable_pos(shmap);
 		for(j=0;j<i;j++){
-				if(source_pos_arr[i] == source_pos_arr[j])
+				if(sourcearr[i].pos == sourcearr[j].pos)
 					break;
 		}
 		if(j==i)
@@ -196,11 +199,11 @@ int main(int argc, char *argv[]){
 	sprintf(source_argv[0],"./source");
 	sprintf(source_argv[2],"%d",mappa_shm);
 	sprintf(source_argv[3],"%d",sync_sem);
-	sprintf(source_argv[4],"%d",/*pipe_fd[1]*/msg_id);
+	sprintf(source_argv[4],"%d",msg_id);
 	sprintf(source_argv[5],"%d",sc_sem);
 	source_argv[6] = NULL;
 	for(i=0;terminate_flag && i<SO_SOURCES;i++){
-		switch(source_pids[i]=fork()){
+		switch(sourcearr[i].pid=fork()){
 			case -1:
 				switch(errno){
 					case EAGAIN :
@@ -212,7 +215,7 @@ int main(int argc, char *argv[]){
 				}
 			case 0 : 
 				srand(time(NULL) - i*2);
-				sprintf(source_argv[1],"%d",source_pos_arr[i]);
+				sprintf(source_argv[1],"%d",sourcearr[i].pos);
 				execvp("./source", source_argv);
 				CHECK
 			default :
@@ -228,10 +231,8 @@ int main(int argc, char *argv[]){
 	alarm(SO_DURATION);
 
 	for(i=0; terminate_flag && i<SO_SOURCES;i++){
-		printf("SOURCE pid:%d	pos:%d\n",source_pids[i],source_pos_arr[i]);
+		printf("SOURCE pid:%d	pos:%d\n",sourcearr[i].pid,sourcearr[i].pos);
 	}
-	free(source_pos_arr);
-	free(source_pids);
 
 	ops[0].sem_num = 0;
 	ops[0].sem_op = -1;
@@ -253,7 +254,7 @@ int main(int argc, char *argv[]){
 
 	while(wait(NULL)!=-1){	/*wait fino a quando tutti i figli terminano o timer*/}
 	semctl(sc_sem,0,IPC_RMID);
-	print_term(shmap, SO_TOPCELLS, SO_TAXI, stats, r_stats);
+	print_term(shmap, SO_TOPCELLS, SO_TAXI, SO_SOURCES, stats, r_stats);
 
 	shmdt(shmap);
 	shmctl(mappa_shm,IPC_RMID,NULL);
@@ -279,18 +280,23 @@ void handler(int signal){
 			break;
 	}
 }
+int compare_sourcepos(const void*a, const void*b){
+	struct source *sa, *sb;
+	sa = (struct source *) a;
+	sb = (struct source *) b;
+	return sa->pos-sb->pos;
+}
 
 int compare_celle(const void *a,const void*b){
 	int value_a = (*((cella **) a))->n_attr;
 	int value_b = (*((cella **) b))->n_attr;
-	if(value_a<value_b)		return -1;
-	else if(value_a == value_b)	return 0;
-	else				return 1;
+	if(value_a<value_b)
+		return value_a-value_b;
 	
 }
 
-void print_term(cella *map, int SO_TOPCELLS, int SO_TAXI, taxi_stats *stats, richieste_stats *r_stats){
-	int i, output[3]={0,0,0};	/*output[0]->taxi che ha percorso più celle,
+void print_term(cella *map, int SO_TOPCELLS, int SO_TAXI, int SO_SOURCES,taxi_stats *stats, richieste_stats *r_stats){
+	int i, j, output[3]={0,0,0};	/*output[0]->taxi che ha percorso più celle,
 					/ output[1]->taxi che ha servito la richiesta più lunga(nsec time),
 					/ output[2]->taxi che ha servito più richieste.
 					*/
@@ -306,11 +312,12 @@ void print_term(cella *map, int SO_TOPCELLS, int SO_TAXI, taxi_stats *stats, ric
 		}
 		printf("\n\n\n\n\n");
 		printf("TAXI CON MAGGIOR NUMERO DI CELLE PERCORSE : %d N CELLE : %d\n",stats[output[0]].pid,stats[output[0]].celle_percorsemax);
-		printf("TAXI CHE HA EFFETTUATO IL TRADITTO PIÙ LUNGO : %d DURATA : %ld\n",stats[output[1]].pid,stats[output[1]].tmax);
+		printf("TAXI CHE HA EFFETTUATO IL TRAGITTO PIÙ LUNGO : %d DURATA : %ld\n",stats[output[1]].pid,stats[output[1]].tmax);
 		printf("TAXI CON IL NUMERO MAGGIORE DI RICHIESTE RACCOLTE : %d N RICHIESTE : %d\n",stats[output[2]].pid,stats[output[2]].n_richiestemax);
 		printf("RICHIESTE COMPLETATE : %d \n",r_stats->completed);
 		printf("RICHIESTE ABORTITE : %d \n", r_stats->aborted);
 		printf("RICHIESTE INEVASE : %d \n",r_stats->inevasi);
+		
 	cella_ptr_ptr = malloc(sizeof(cella *)*SO_WIDTH*SO_HEIGHT);
 	for(i=0; i<SO_WIDTH*SO_HEIGHT;  i++){
 		cella_ptr_ptr[i] = &(cella_ptr[i]);
@@ -323,12 +330,25 @@ void print_term(cella *map, int SO_TOPCELLS, int SO_TAXI, taxi_stats *stats, ric
 	}
 	free(cella_ptr_ptr);
 
-	for(i=0; i < SO_WIDTH*SO_HEIGHT; i++){
-		if(cella_ptr[i].n_attr)
-			printf("%d	", cella_ptr[i].n_attr);
-		else
-			printf("*	");
+	qsort(sourcearr, SO_SOURCES, sizeof(struct source), compare_sourcepos);
 
+	for(i=0, j=0; i < SO_WIDTH*SO_HEIGHT; i++){
+		if(cella_ptr[i].n_attr){
+			printf("%d", cella_ptr[i].n_attr);
+			if(j<SO_SOURCES && sourcearr[j].pos == i){
+			printf("so");
+			j++;
+			}
+		}else{
+			if(j<SO_SOURCES && sourcearr[j].pos == i){
+			printf("so");
+			j++;
+			}else{
+			printf("*");
+			}
+		}
+		
+		printf("	");
 		if(i%SO_WIDTH == SO_WIDTH-1)
 			printf("\n\n");
 	}

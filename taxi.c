@@ -314,7 +314,9 @@ int transition(int celle_sem, int pos, int newpos){
 		switch(errno){
 			case EAGAIN :
 				if(semop(celle_sem, ops, 1)==-1)
-					PRINT_TERMINATE
+					fprintf(stderr,	
+					"%s:%d PID=%5d : Error %d(%s)\n"
+					,__FILE__,__LINE__,getpid(),errno,strerror(errno));
 				return -1;
 			case EINVAL :
 			case EIDRM :
