@@ -10,9 +10,10 @@
 #include "mappa.h"
 
 /*ritorna 0 se la generazione della mappa è riuscita -1 altrimenti*/
-int map_gen(cella *map,const int celle_sem,const int SO_HOLES,const long SO_CAPTMIN,const long SO_CAPTMAX,const int SO_CAPMIN,const int SO_CAPMAX){
-
-	int i,candidate,accepted,count=0;
+int map_gen(cella *map,const int celle_sem,const int SO_HOLES,const long SO_CAPTMIN,const long SO_CAPTMAX,
+	    const int SO_CAPMIN,const int SO_CAPMAX){
+	int i;
+	int candidate,accepted,count=0;
 	int seminit_val;
 
 	/*inizializzo celle */
