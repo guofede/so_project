@@ -15,7 +15,11 @@
 
 #define TERMINATE {shmdt(map); exit(0);}
 
-
+#define PRINT_TERMINATE	 		{fprintf(stderr, \
+					"%s:%d PID=%5d : Error %d(%s)"\
+					,__FILE__,__LINE__,getpid(),errno,strerror(errno));\
+					shmdt(map); exit(0);\
+					}
 
 
 int moveHoriz(cella *map,const int celle_sem,const int sc_sem,const int dest);
@@ -78,12 +82,12 @@ int main(int argc, char *argv[]){
 		TERMINATE
 
 	if(getresource(sc_sem, taxi->pos)==-1)
-		TERMINATE
+		PRINT_TERMINATE
 
 	map[taxi->pos].n_attr++;
 
 	if(releaseresource(sc_sem, taxi->pos)==-1)
-		TERMINATE
+		PRINT_TERMINATE
 
 	while(1){
 		if(msgrcv(msg_id,&msgbuf,sizeof(msgbuf.richiesta),0,0)==-1)
@@ -92,10 +96,7 @@ int main(int argc, char *argv[]){
 				case EIDRM :
 					TERMINATE
 				default :
-					fprintf(stderr,	
-					"%s:%d PID=%5d : Error %d(%s)"
-					,__FILE__,__LINE__,getpid(),errno,strerror(errno));
-					TERMINATE
+					PRINT_TERMINATE
 			}
 		taxi->n_richieste++;
 		if(taxi->n_richieste > taxi->n_richiestemax)
@@ -110,20 +111,17 @@ int main(int argc, char *argv[]){
 				case EIDRM :
 					TERMINATE
 				default :
-					fprintf(stderr,
-					"%s:%d PID=%5d : Error %d(%s)\n"
-					,__FILE__,__LINE__,getpid(),errno,strerror(errno));
-					TERMINATE
+					PRINT_TERMINATE
 			}
 			/*SONO IN SOURCE POSSO EVADERE IL VIAGGIO*/
 			
 		if(getresource(sc_sem, SO_WIDTH*SO_HEIGHT)==-1)
-				TERMINATE
+				PRINT_TERMINATE
 
 		r_stats->inevasi--;
 
 		if(releaseresource(sc_sem, SO_WIDTH*SO_HEIGHT)==-1)
-				TERMINATE
+				PRINT_TERMINATE
 		
 
 		taxi->tnow = 0;
@@ -144,19 +142,16 @@ int main(int argc, char *argv[]){
 					releaseresource(sc_sem, SO_WIDTH*SO_HEIGHT);
 					TERMINATE
 				default :
-					fprintf(stderr,	
-					"%s:%d PID=%5d : Error %d(%s)\n"
-					,__FILE__,__LINE__,getpid(),errno,strerror(errno));
-					TERMINATE
+					PRINT_TERMINATE
 			}
 		}else{	/*SONO IN SOURCE POSSO EVADERE IL VIAGGIO*/
 			
 			if(getresource(sc_sem, SO_WIDTH*SO_HEIGHT)==-1)
-				TERMINATE
+				PRINT_TERMINATE
 			r_stats->completed++;
 
 			if(releaseresource(sc_sem, SO_WIDTH*SO_HEIGHT)==-1)
-				TERMINATE
+				PRINT_TERMINATE
 			if(taxi->tnow>taxi->tmax)
 			taxi->tmax = taxi->tnow;
 		}	
@@ -318,7 +313,9 @@ int transition(int celle_sem, int pos, int newpos){
 	if(semtimedop(celle_sem, ops, 2, &timeout) == -1){
 		switch(errno){
 			case EAGAIN :
-				semop(celle_sem, ops, 1);
+				if(semop(celle_sem, ops, 1)==-1)
+					PRINT_TERMINATE
+				return -1;
 			case EINVAL :
 			case EIDRM :
 				return -1;
