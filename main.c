@@ -32,10 +32,10 @@ int mappa_shm,celle_sem, sc_sem, sync_sem, msg_id;
 int terminate_flag=1;
 
 int main(int argc, char *argv[]){
-	int SO_TAXI, SO_HOLES, SO_CAPMIN, SO_CAPMAX, SO_SOURCES, SO_DURATION, SO_TIMEOUT, SO_TOPCELLS;
+	unsigned int SO_TAXI, SO_HOLES, SO_CAPMIN, SO_CAPMAX, SO_SOURCES, SO_DURATION, SO_TIMEOUT, SO_TOPCELLS;
 	int i, j, *source_pos_arr, MAX_HOLES,* source_pids;
 	/*int pipe_fd[2];*/
-	long SO_TIMENSEC_MIN,SO_TIMENSEC_MAX;
+	unsigned long SO_TIMENSEC_MIN,SO_TIMENSEC_MAX;
 	struct sembuf ops[1];
 	char *taxi_argv[9], *source_argv[7];
 	cella * shmap;
@@ -50,55 +50,58 @@ int main(int argc, char *argv[]){
 
 			/*INSERIMENTO INPUTS*/
 	printf("numero taxi :");
-	scanf("%d",&SO_TAXI);
-	while(1){
-		printf("numero buchi :");
-		scanf("%d", &SO_HOLES);
-		if(SO_HOLES>MAX_HOLES || SO_HOLES<0)
-			printf("TROPPI HOLE!! RIPROVA\n");
-		else
-			break;
+	scanf("%u",&SO_TAXI);
+	
+	printf("numero buchi :");
+	scanf("%u", &SO_HOLES);
+	if(SO_HOLES>MAX_HOLES){
+		fprintf(stderr, "SO_HOLES non valido");
+		exit(EXIT_FAILURE);
 	}
+	
 	printf("limite minimo capacità taxi :");
-	scanf("%d", &SO_CAPMIN);
-	while(1){
-		printf("limite massimo capacità taxi :");
-		scanf("%d", &SO_CAPMAX);
-		if(SO_CAPMAX<SO_CAPMIN)
-			printf("la capacità massima deve essere maggiore di quella minima, RIPROVA\n");
-		else
-			break;
+	scanf("%u", &SO_CAPMIN);
+	if(SO_CAPMIN<1){
+		fprintf(stderr, "SO_HOLES non valido");
+		exit(EXIT_FAILURE);
 	}
-
+	
+	printf("limite massimo capacità taxi :");
+	scanf("%u", &SO_CAPMAX);
+	if(SO_CAPMAX<SO_CAPMIN){
+		fprintf(stderr, "SO_CAPMAX non valido");
+		exit(EXIT_FAILURE);
+	}
+	
 	printf("limite minimo attraversamento (nsec):");
-	scanf("%ld", &SO_TIMENSEC_MIN);
-	while(1){
-		printf("limite massimo attraversamento (nsec):");
-		scanf("%ld", &SO_TIMENSEC_MAX);
-		if(SO_TIMENSEC_MAX<SO_TIMENSEC_MIN)
-			printf("il tempo di attraversamenmto massimo deve essere maggiore di quella minimo, RIPROVA\n");
-		else
-			break;
+	scanf("%lu", &SO_TIMENSEC_MIN);
+	
+	printf("limite massimo attraversamento (nsec):");
+	scanf("%lu", &SO_TIMENSEC_MAX);
+	if(SO_TIMENSEC_MAX<SO_TIMENSEC_MIN){
+		printf("il tempo di attraversamenmto massimo deve essere maggiore di quella minimo");
+		exit(EXIT_FAILURE);
 	}
-	while(1){
-		printf("numero source :");
-		scanf("%d",&SO_SOURCES);
-		if(SO_SOURCES>SO_WIDTH*SO_HEIGHT-SO_HOLES)
-			printf("TROPPI SOURCE\n");
-		else
-			break;
+	
+	
+	printf("numero source :");
+	scanf("%u",&SO_SOURCES);
+	if(SO_SOURCES>SO_WIDTH*SO_HEIGHT-SO_HOLES){
+		fprintf(stderr, "SO_SOURCES non valido");
+		exit(EXIT_FAILURE);
 	}
+	
 	printf("timeout taxi (sec):");
-	scanf("%d",&SO_TIMEOUT);
+	scanf("%u",&SO_TIMEOUT);
+	
 	printf("tempo simulazione (sec):");
-	scanf("%d",&SO_DURATION);
-	while(1){
-		printf("numero top cells:");
-		scanf("%d",&SO_TOPCELLS);
-		if(SO_TOPCELLS > SO_WIDTH*SO_HEIGHT)
-			printf("TOP CELLS PUÒ ESSERE AL MASSIMO LA DIMENSIONE DELLA MAPPA");
-		else
-			break;
+	scanf("%u",&SO_DURATION);
+	
+	printf("numero top cells:");
+	scanf("%u",&SO_TOPCELLS);
+	if(SO_TOPCELLS > SO_WIDTH*SO_HEIGHT){
+		fprintf(stderr, "TOP CELLS PUÒ ESSERE AL MASSIMO LA DIMENSIONE DELLA MAPPA");
+		exit(EXIT_FAILURE);
 	}
 			/*FINE INPUTS*/
 
@@ -127,14 +130,10 @@ int main(int argc, char *argv[]){
 	/*STATS ARRAY È ALLOCATA DOPO LA MAPPA*/
 	stats = (taxi_stats *) (r_stats+1);
 	srand(time(NULL));
-	if(map_gen(shmap,celle_sem,SO_HOLES,SO_TIMENSEC_MIN,SO_TIMENSEC_MAX,SO_CAPMIN,SO_CAPMAX)==-1){
-		shmdt(shmap);
-		shmctl(mappa_shm,IPC_RMID,NULL);
-		semctl(celle_sem,0,IPC_RMID);
-		exit(EXIT_FAILURE);
-	}
+	if(map_gen(shmap,celle_sem,SO_HOLES,SO_TIMENSEC_MIN,SO_TIMENSEC_MAX,SO_CAPMIN,SO_CAPMAX)==-1)
+		terminate_flag = 0;
 
-	/*semaforo per gestire scrittura sulle varie celle della mappa(sezione critica)*/
+	/*semaforo per gestire scrittura sulle varie celle della mappa e tabella richieste(sezione critica)*/
 	sc_sem = semget(IPC_PRIVATE, SO_WIDTH*SO_HEIGHT+1, IPC_CREAT|0600);
 		CHECK
 	/*imposto semafori per scrittura su sezione critica una per ogni cella*/
@@ -142,15 +141,14 @@ int main(int argc, char *argv[]){
 		semctl(sc_sem,i,SETVAL,1);
 		CHECK
 	}
+	
 	/*ottengo semaforo per sincronizzare la partenza della simulazione*/
 	sync_sem = semget(IPC_PRIVATE, 1, IPC_CREAT|0600);
-		CHECK
 	semctl(sync_sem, 0, SETVAL, 1);
-		CHECK
 	msg_id = msgget(IPC_PRIVATE, IPC_CREAT|0600);
-		CHECK
+	
 	for(i=0;i<8;i++){
-		taxi_argv[i] = malloc(64);
+		taxi_argv[i] = malloc(256);
 	}
 	
 	sprintf(taxi_argv[0],"./taxi");
@@ -166,13 +164,9 @@ int main(int argc, char *argv[]){
 	for(i=0;terminate_flag && i<SO_TAXI; i++){
 		switch(fork()){
 			case -1:
-				switch(errno){
-					case EAGAIN :
-						perror("LIMITE DI THREADS MASSIMI RAGGIUNTO DIMINUIRE NUMERO DI TAXI \n");
-						terminate_flag = 0;
-						break;
-					default :
-						CHECK
+				fprintf(stderr, "fork taxi error");
+				terminate_flag = 0;
+				break;
 				}
 			case 0 :
 				sprintf(taxi_argv[7],"%d",i);
@@ -185,7 +179,7 @@ int main(int argc, char *argv[]){
 
 
 	for(i=0;i<6;i++){
-		source_argv[i] = malloc(64);
+		source_argv[i] = malloc(256);
 	}
 	source_pids = malloc(sizeof(int)*SO_SOURCES);
 	source_pos_arr = malloc(sizeof(int)*SO_SOURCES);
@@ -219,7 +213,6 @@ int main(int argc, char *argv[]){
 			case 0 : 
 				srand(time(NULL) - i*2);
 				sprintf(source_argv[1],"%d",source_pos_arr[i]);
-
 				execvp("./source", source_argv);
 				CHECK
 			default :
