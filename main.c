@@ -32,10 +32,10 @@ int mappa_shm,celle_sem, sc_sem, sync_sem, msg_id;
 int terminate_flag=1;
 
 int main(int argc, char *argv[]){
-	unsigned int SO_TAXI, SO_HOLES, SO_CAPMIN, SO_CAPMAX, SO_SOURCES, SO_DURATION, SO_TIMEOUT, SO_TOPCELLS;
+	int SO_TAXI, SO_HOLES, SO_CAPMIN, SO_CAPMAX, SO_SOURCES, SO_DURATION, SO_TIMEOUT, SO_TOPCELLS;
 	int i, j, *source_pos_arr, MAX_HOLES,* source_pids;
 	/*int pipe_fd[2];*/
-	unsigned long SO_TIMENSEC_MIN,SO_TIMENSEC_MAX;
+	long SO_TIMENSEC_MIN,SO_TIMENSEC_MAX;
 	struct sembuf ops[1];
 	char *taxi_argv[9], *source_argv[7];
 	cella * shmap;
@@ -50,34 +50,34 @@ int main(int argc, char *argv[]){
 
 			/*INSERIMENTO INPUTS*/
 	printf("numero taxi :");
-	scanf("%u",&SO_TAXI);
+	scanf("%d",&SO_TAXI);
 	
 	printf("numero buchi :");
-	scanf("%u", &SO_HOLES);
+	scanf("%d", &SO_HOLES);
 	if(SO_HOLES>MAX_HOLES){
 		fprintf(stderr, "SO_HOLES non valido");
 		exit(EXIT_FAILURE);
 	}
 	
 	printf("limite minimo capacità taxi :");
-	scanf("%u", &SO_CAPMIN);
+	scanf("%d", &SO_CAPMIN);
 	if(SO_CAPMIN<1){
 		fprintf(stderr, "SO_HOLES non valido");
 		exit(EXIT_FAILURE);
 	}
 	
 	printf("limite massimo capacità taxi :");
-	scanf("%u", &SO_CAPMAX);
+	scanf("%d", &SO_CAPMAX);
 	if(SO_CAPMAX<SO_CAPMIN){
 		fprintf(stderr, "SO_CAPMAX non valido");
 		exit(EXIT_FAILURE);
 	}
 	
 	printf("limite minimo attraversamento (nsec):");
-	scanf("%lu", &SO_TIMENSEC_MIN);
+	scanf("%ld", &SO_TIMENSEC_MIN);
 	
 	printf("limite massimo attraversamento (nsec):");
-	scanf("%lu", &SO_TIMENSEC_MAX);
+	scanf("%ld", &SO_TIMENSEC_MAX);
 	if(SO_TIMENSEC_MAX<SO_TIMENSEC_MIN){
 		printf("il tempo di attraversamenmto massimo deve essere maggiore di quella minimo");
 		exit(EXIT_FAILURE);
@@ -85,20 +85,20 @@ int main(int argc, char *argv[]){
 	
 	
 	printf("numero source :");
-	scanf("%u",&SO_SOURCES);
+	scanf("%d",&SO_SOURCES);
 	if(SO_SOURCES>SO_WIDTH*SO_HEIGHT-SO_HOLES){
 		fprintf(stderr, "SO_SOURCES non valido");
 		exit(EXIT_FAILURE);
 	}
 	
 	printf("timeout taxi (sec):");
-	scanf("%u",&SO_TIMEOUT);
+	scanf("%d",&SO_TIMEOUT);
 	
 	printf("tempo simulazione (sec):");
-	scanf("%u",&SO_DURATION);
+	scanf("%d",&SO_DURATION);
 	
 	printf("numero top cells:");
-	scanf("%u",&SO_TOPCELLS);
+	scanf("%d",&SO_TOPCELLS);
 	if(SO_TOPCELLS > SO_WIDTH*SO_HEIGHT){
 		fprintf(stderr, "TOP CELLS PUÒ ESSERE AL MASSIMO LA DIMENSIONE DELLA MAPPA");
 		exit(EXIT_FAILURE);
