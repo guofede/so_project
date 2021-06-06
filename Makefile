@@ -25,3 +25,4 @@ clean :
 	rm main
 	rm taxi
 	rm source
+	rm *.o

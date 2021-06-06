@@ -108,7 +108,7 @@ void map_print(cella *map, int celle_sem){
 
 
 int traversable(cella *map, const int pos){
-	if(pos>=(SO_WIDTH*SO_HEIGHT || map == NULL))
+	if(pos>=(SO_WIDTH*SO_HEIGHT) || map == NULL)
 		return 0;
 	else return
 		!map[pos].is_hole;
